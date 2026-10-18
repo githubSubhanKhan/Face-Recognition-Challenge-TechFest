@@ -1,0 +1,36 @@
+{
+  "detector_pack": "buffalo_l",
+  "det_size": 640,
+  "det_thresh": 0.35,
+  "pad_retry": true,
+  "upscale_retry": true,
+  "enhance_for_detection": true,
+  "use_alignment": true,
+  "use_enhancement": true,
+  "enhancement_fusion": true,
+  "use_flip_tta": true,
+  "models": [
+    {
+      "name": "adaface_ir101",
+      "kind": "adaface_hf",
+      "path": "models/adaface_ir101_webface12m",
+      "repo_id": "minchul/cvlface_adaface_ir101_webface12m",
+      "channel_order": "rgb",
+      "weight": 1.0,
+      "finetuned_ckpt": ""
+    },
+    {
+      "name": "glint_r100",
+      "kind": "insightface_onnx",
+      "path": "~/.insightface/models/antelopev2/glintr100.onnx",
+      "repo_id": "",
+      "channel_order": "rgb",
+      "weight": 1.0,
+      "finetuned_ckpt": ""
+    }
+  ],
+  "fusion": "weighted_mean",
+  "quality_binned_threshold": true,
+  "ctx_id": 0,
+  "cache_dir": "cache"
+}

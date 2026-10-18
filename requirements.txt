@@ -1,0 +1,18 @@
+# Kaggle / Colab (GPU). On Kaggle: pip install -q -r requirements.txt
+insightface==0.7.3
+onnxruntime-gpu>=1.17      # use `onnxruntime` instead on a CPU-only machine
+transformers>=4.40
+huggingface_hub>=0.23
+safetensors
+omegaconf                  # some CVLFace wrappers import it; harmless otherwise
+torch>=2.1
+torchvision
+opencv-python-headless>=4.8
+numpy
+pandas
+scikit-learn
+scipy
+matplotlib
+tqdm
+tabulate
+Pillow
