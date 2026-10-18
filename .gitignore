@@ -1,0 +1,46 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# --- Virtual environments ---
+venv/
+.venv/
+env/
+
+# --- Secrets / credentials ---
+.env
+.env.*
+kaggle.json
+
+# --- Model weights (download with scripts/00_download_models.py) ---
+models/
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors
+
+# --- Datasets & personal face photos (consent data must never be public) ---
+data/
+datasets/
+*.zip
+*.tar
+*.tar.gz
+*.7z
+
+# --- Generated outputs ---
+results/
+cache/
+submission.csv
+identification.csv
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
