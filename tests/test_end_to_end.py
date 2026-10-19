@@ -187,6 +187,8 @@ def test_end_to_end():
         sp = pd.read_csv("splits.csv")
         assert set(sp[sp["split"] != "train"]["source"]) == {"own_collection"}
         assert sp.groupby("identity")["split"].nunique().max() == 1
+        own = sp[sp["source"] == "own_collection"].groupby("identity")["split"].first()
+        assert (own == "train").any() and (own != "train").any(), "own data must feed both fine-tuning and eval"
 
         try:
             import torch  # noqa: F401
@@ -200,6 +202,7 @@ def test_end_to_end():
             run(ft, ["--splits", "splits.csv", "--pairs-val", "pairs_val.csv", "--epochs", "2", "--batch", "16",
                      "--workers", "0", "--min-images", "2"])
             assert Path("checkpoints/finetune_history.json").exists()
+            assert Path("checkpoints/adaface_ir101_finetuned.pt").exists(), "fine-tuned model must always be saved"
 
         run(load_script("04_evaluate.py"), ["--pairs-val", "pairs_val.csv", "--pairs-test", "pairs_test.csv",
                                              "--splits", "splits.csv", "--ctx", "-1"])
@@ -209,6 +212,9 @@ def test_end_to_end():
         for f in ["test_roc.png", "test_det.png", "test_hist.png", "per_group.csv", "summary.md"]:
             assert Path("results/full_pipeline", f).exists(), f
         assert "gender" in Path("results/full_pipeline/summary.md").read_text()
+        idm = m["identification"]
+        print(f"   synthetic rank-1 {idm['rank1']:.4f}, DIR {idm['dir']:.4f}, FPIR {idm['fpir']:.4f}")
+        assert idm["rank1"] > 0.9 and idm["rank5"] >= idm["rank1"]
 
         run(load_script("05_ablation.py"), ["--pairs-val", "pairs_val.csv", "--pairs-test", "pairs_test.csv",
                                              "--ctx", "-1"])

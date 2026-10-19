@@ -11,10 +11,11 @@ WORSE on new people (which is all the hidden benchmark contains). Guards used he
   4. Warm-started head       - class centres initialised from pretrained embeddings,
                                so early gradients are sensible instead of random.
   5. Tiny backbone LR + cosine decay, few epochs.
-  6. Early stopping on VALIDATION IDENTITIES (unseen people) - and the checkpoint is
-     only saved if it beats the pretrained model's val EER. If it never does, the
-     script tells you to ship the pretrained model; that is a legitimate result to
-     report in the ablation.
+  6. Model selection on VALIDATION IDENTITIES (unseen people): the best epoch is always
+     saved (fine-tuning is a required deliverable), and finetune_history.json records
+     whether it beat the pretrained model. Whether to SHIP it is decided by
+     04_evaluate / 05_ablation on the test split; "pretrained was better" is a legitimate
+     result to report.
   7. Heavy degradation + occlusion augmentation (CCTV blur, low light, masks, hijab /
      dupatta, caps, sunglasses) so the adaptation is towards robustness, not memorisation.
 
@@ -188,7 +189,8 @@ def main():
         scaler = torch.cuda.amp.GradScaler(enabled=device.type == "cuda")
 
     os.makedirs(args.out, exist_ok=True)
-    best_eer, best_path, history = base_eer, None, [{"epoch": 0, "val_eer": base_eer}]
+    best_path = Path(args.out) / f"{args.model_name}_finetuned.pt"
+    best_eer, best_epoch, history = float("inf"), 0, [{"epoch": 0, "val_eer": base_eer}]
     for ep in range(1, args.epochs + 1):
         student.train()
         freeze_bn(student)
@@ -213,21 +215,25 @@ def main():
             pbar.set_postfix(ce=f"{ce.item():.3f}", distill=f"{distill.item():.4f}")
         eer = val_eer(student, pairs_val, raw2aligned, co, device)
         history.append({"epoch": ep, "val_eer": eer})
-        print(f"epoch {ep}: val EER {eer*100:.3f}%  (pretrained {base_eer*100:.3f}%, best {best_eer*100:.3f}%)")
+        print(f"epoch {ep}: val EER {eer*100:.3f}%  (pretrained {base_eer*100:.3f}%, "
+              f"best fine-tuned {min(best_eer, eer)*100:.3f}%)")
         if eer < best_eer:
-            best_eer = eer
-            best_path = Path(args.out) / f"{args.model_name}_finetuned.pt"
+            best_eer, best_epoch = eer, ep
             torch.save(student.state_dict(), best_path)
             print(f"  saved {best_path}")
 
-    Path(args.out, "finetune_history.json").write_text(json.dumps(history, indent=2))
-    if best_path is None:
-        print("\nFine-tuning never beat the pretrained model on unseen validation identities.\n"
-              "Ship the pretrained model, and report this honestly in the ablation (it is a real finding).")
+    beat = best_eer < base_eer
+    Path(args.out, "finetune_history.json").write_text(json.dumps(
+        {"pretrained_val_eer": base_eer, "best_val_eer": best_eer, "best_epoch": best_epoch,
+         "beat_pretrained": beat, "epochs": history}, indent=2))
+    print(f"\nBest fine-tuned val EER {best_eer*100:.3f}% (epoch {best_epoch}) vs pretrained {base_eer*100:.3f}%"
+          f" -> {'better' if beat else 'NOT better'} on unseen validation identities.\n"
+          f"Compare on the TEST split: python scripts/05_ablation.py --finetuned {best_path}")
+    if beat:
+        print(f"To ship it: set models[{args.model_name}].finetuned_ckpt = \"{best_path}\" in configs/pipeline.json,"
+              " then re-run 04_evaluate.py.")
     else:
-        print(f"\nBest val EER {best_eer*100:.3f}% vs pretrained {base_eer*100:.3f}%.\n"
-              f"Add to configs/pipeline.json -> models[{args.model_name}].finetuned_ckpt = \"{best_path}\"\n"
-              "then re-run 04_evaluate.py and 05_ablation.py --finetuned to confirm on the TEST split.")
+        print("Keep shipping the pretrained model, and report this honestly in the ablation (it is a real finding).")
 
 
 if __name__ == "__main__":

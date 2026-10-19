@@ -83,11 +83,14 @@ def find_duplicates(df: pd.DataFrame, hashes: list[int], max_dist: int = 4):
 
 # ---------------------------------------------------------------- splitting
 def identity_disjoint_split(df: pd.DataFrame, val_frac=0.15, test_frac=0.2, seed=42,
-                            min_images_eval=2, test_sources: list | None = None) -> pd.DataFrame:
+                            min_images_eval=2, test_sources: list | None = None,
+                            eval_source_train_frac: float = 0.0) -> pd.DataFrame:
     """Assign every IDENTITY (not image) to train/val/test so no person appears in two splits.
 
     test_sources: if given, only identities from these sources go to val/test (e.g. ["own_collection"]
     so the benchmark you report on is Pakistani, consented and never seen by the pretrained model).
+    eval_source_train_frac: with test_sources, this fraction of their identities stays in train (the
+    problem statement requires fine-tuning on your own collected data); the rest is split val/test.
     """
     rng = np.random.default_rng(seed)
     df = df.copy()
@@ -98,6 +101,8 @@ def identity_disjoint_split(df: pd.DataFrame, val_frac=0.15, test_frac=0.2, seed
         eligible = [i for i in eligible if i in set(src_ok)]
     eligible = np.array(sorted(eligible))
     rng.shuffle(eligible)
+    if test_sources and eval_source_train_frac > 0:
+        eligible = eligible[int(round(len(eligible) * eval_source_train_frac)):]  # the rest stays in train
     n = len(eligible)
     if test_sources:  # every eligible identity comes from the eval sources -> split them val/test only
         n_test = int(round(n * test_frac / (val_frac + test_frac)))

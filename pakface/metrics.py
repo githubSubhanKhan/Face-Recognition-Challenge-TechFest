@@ -100,7 +100,8 @@ def plot_all(scores, labels, threshold, out_prefix: str, title: str = "") -> lis
     ax.plot(np.clip(fpr, 1e-5, 1), tpr, lw=2, color="#2563eb", label=f"ROC (EER={eer*100:.2f}%)")
     ax.set_xscale("log")
     ax.set_xlim(1e-4, 1)
-    ax.set_ylim(0.5, 1.001)
+    shown = tpr[fpr >= 1e-4]  # don't clip weaker curves (e.g. the naive ablation baseline) off the plot
+    ax.set_ylim(min(0.5, np.floor(shown.min() * 10) / 10) if len(shown) else 0.5, 1.001)
     ax.set_xlabel("False Accept Rate (log)")
     ax.set_ylabel("True Accept Rate")
     ax.grid(alpha=0.3, which="both")

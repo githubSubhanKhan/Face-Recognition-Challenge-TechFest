@@ -5,6 +5,7 @@ transformers>=4.40
 huggingface_hub>=0.23
 safetensors
 omegaconf                  # some CVLFace wrappers import it; harmless otherwise
+fvcore                     # imported by the CVLFace iresnet model code (AdaFace IR-101)
 torch>=2.1
 torchvision
 opencv-python-headless>=4.8

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import glob
 import os
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -83,18 +84,46 @@ def download_hf_repo(repo_id: str, path: str, token: str | None = None) -> None:
 
 
 def load_adaface_hf(path: str, repo_id: str = "", token: str | None = None):
-    from transformers import AutoModel
+    """Build the CVLFace model the way its wrapper.py does, without AutoModel.
+
+    wrapper.py targets transformers 4.x (it never calls post_init(), which 5.x requires), so we replicate
+    it: model.yaml -> get_model -> pretrained_model/model.pt, held under `.model` so state-dict keys (and
+    fine-tuned checkpoints) match the original wrapper.
+    """
+    import torch
+    import yaml
+    from omegaconf import OmegaConf
 
     path = os.path.abspath(os.path.expanduser(path))
     if repo_id and not os.path.exists(os.path.join(path, "model.safetensors")):
         download_hf_repo(repo_id, path, token)
     cwd = os.getcwd()
-    os.chdir(path)  # CVLFace wrapper imports sibling files relative to cwd
+    os.chdir(path)  # CVLFace code resolves yaml_path / pretrained_model/* relative to cwd
+    # `from models import get_model` must hit the CVLFace package, not the project root's models/ dir
+    # (weights), which Python would otherwise pick up as an empty namespace package.
+    sys.path.insert(0, path)
+    for name in [m for m in sys.modules if m == "models" or m.startswith("models.")]:
+        del sys.modules[name]
     try:
-        model = AutoModel.from_pretrained(path, trust_remote_code=True, token=token)
+        from models import get_model
+
+        with open("pretrained_model/model.yaml") as f:
+            conf = OmegaConf.create(yaml.safe_load(f))
+        inner = get_model(conf)
+        inner.load_state_dict_from_path("pretrained_model/model.pt")
     finally:
         os.chdir(cwd)
-    return model
+        sys.path.remove(path)
+
+    class CVLFaceRecognitionModel(torch.nn.Module):
+        def __init__(self, model):
+            super().__init__()
+            self.model = model
+
+        def forward(self, *args, **kwargs):
+            return self.model(*args, **kwargs)
+
+    return CVLFaceRecognitionModel(inner)
 
 
 def adaface_forward(model, x):

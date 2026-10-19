@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .matching import Calibration, tune_fusion_weights
+from .matching import Calibration, fused_embeddings, tune_fusion_weights
 from .metrics import compute_eer, confusion_metrics, full_report
 
 DEMOGRAPHIC_ATTRS = ["gender", "age_group", "skin_tone", "region", "ethnicity"]
@@ -70,6 +70,52 @@ def group_breakdown(pairs: pd.DataFrame, scores, thresholds, meta: pd.DataFrame 
                           for a, b in zip(pairs["path_a"], pairs["path_b"])])
             add("auto_quality_flag", flag, m)
     return pd.DataFrame(rows)
+
+
+def identification_report(store, paths: list, identities: list, weights: dict | None = None,
+                          threshold: float | None = None, unknown_frac: float = 0.3, seed: int = 0) -> dict:
+    """1:N identification ("pick one face out of a whole school") on held-out identities.
+
+    Each person is enrolled with ONE image (their highest-quality one); every other image is a probe.
+    Closed set: rank-1 / rank-5 accuracy. Open set (if threshold given): unknown_frac of the people are
+    removed from the gallery; DIR = known probes identified correctly AND above threshold,
+    FPIR = unknown probes wrongly accepted as someone in the gallery.
+    """
+    df = pd.DataFrame({"path": paths, "identity": [str(i) for i in identities]}).drop_duplicates("path")
+    df["q"] = store.quality[[store.index[p] for p in df["path"]]]
+    df = df[df.groupby("identity")["path"].transform("size") >= 2]
+    if df["identity"].nunique() < 2:
+        return {}
+    gal_idx = df.groupby("identity")["q"].idxmax()
+    gal, probes = df.loc[gal_idx], df.drop(gal_idx)
+    gids, truth = gal["identity"].to_numpy(), probes["identity"].to_numpy()
+    sims = fused_embeddings(store, probes["path"].tolist(), weights) @ fused_embeddings(store, gal["path"].tolist(), weights).T
+    ranked = gids[np.argsort(-sims, axis=1)]
+    rep = {"n_gallery_ids": len(gal), "n_probes": len(probes),
+           "rank1": float((ranked[:, 0] == truth).mean()),
+           "rank5": float((ranked[:, :5] == truth[:, None]).any(1).mean())}
+    if threshold is not None and len(gal) >= 3:
+        rng = np.random.default_rng(seed)
+        unknown = rng.choice(gids, max(1, int(round(len(gids) * unknown_frac))), replace=False)
+        keep, known = ~np.isin(gids, unknown), ~np.isin(truth, unknown)
+        s = sims[:, keep]
+        best = s.argmax(1)
+        accepted = s[np.arange(len(s)), best] > threshold
+        rep.update({"open_set_threshold": float(threshold), "n_unknown_ids": len(unknown),
+                    "dir": float(((gids[keep][best] == truth) & accepted)[known].mean()),
+                    "fpir": float(accepted[~known].mean()) if (~known).any() else float("nan")})
+    return rep
+
+
+def identification_markdown(rep: dict) -> str:
+    lines = ["### Identification (1:N) - one enrolment image per person", "", "| metric | value |", "|---|---|",
+             f"| gallery identities | {rep['n_gallery_ids']} |", f"| probes | {rep['n_probes']} |",
+             f"| rank-1 accuracy | {rep['rank1']*100:.3f}% |", f"| rank-5 accuracy | {rep['rank5']*100:.3f}% |"]
+    if "dir" in rep:
+        lines += [f"| open-set: unknown identities | {rep['n_unknown_ids']} (threshold {rep['open_set_threshold']:.4f}) |",
+                  f"| DIR (known, correctly identified) | {rep['dir']*100:.3f}% |",
+                  f"| FPIR (unknown, wrongly accepted) | {rep['fpir']*100:.3f}% |"]
+    return "\n".join(lines)
 
 
 def report_markdown(rep: dict, title: str) -> str:

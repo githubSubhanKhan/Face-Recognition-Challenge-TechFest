@@ -29,7 +29,7 @@ import pandas as pd  # noqa: E402
 
 from pakface.config import PipelineConfig, default_config  # noqa: E402
 from pakface.data import IMG_EXT  # noqa: E402
-from pakface.matching import Calibration, build_templates, identify  # noqa: E402
+from pakface.matching import Calibration, build_templates, fused_embeddings, identify  # noqa: E402
 from pakface.metrics import full_report  # noqa: E402
 from pakface.pipeline import FacePipeline  # noqa: E402
 
@@ -90,18 +90,12 @@ def cmd_identify(args):
     gal_ids = [Path(p).parent.name for p in gal]
     probes = list_images(args.probes)
     store = pipe.build_store(gal + probes)
-    names = list(store.emb)
-    w = calib.weights or {m: 1.0 for m in names}
+    w = calib.weights or None
 
-    # fuse models by concatenating sqrt(weight)-scaled embeddings: dot product = weighted sum of cosines
-    def fused(paths):
-        idx = [store.index[p] for p in paths]
-        tot = sum(w.get(m, 0) for m in names) or 1.0
-        return np.concatenate([store.emb[m][idx] * np.sqrt(w.get(m, 0) / tot) for m in names], axis=1)
-
-    ids, T = build_templates(fused(gal), gal_ids, store.quality[[store.index[p] for p in gal]])
+    ids, T = build_templates(fused_embeddings(store, gal, w), gal_ids, store.quality[[store.index[p] for p in gal]])
     # open-set rejection reuses the calibrated verification threshold (probe-vs-template cosine)
-    preds, scores = identify(fused(probes), ids, T, calib.global_threshold if args.open_set else None)
+    preds, scores = identify(fused_embeddings(store, probes, w), ids, T,
+                             calib.global_threshold if args.open_set else None)
     out = pd.DataFrame({"probe": probes, "predicted_identity": preds, "score": np.round(scores, 6)})
     probe_parent = [Path(p).parent.name for p in probes]
     if set(probe_parent) & set(ids):

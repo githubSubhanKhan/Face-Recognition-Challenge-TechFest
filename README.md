@@ -15,9 +15,15 @@ Report due **22 Oct** · hidden benchmark **23 Oct**.
 On a hidden benchmark, the winning moves are (1) the strongest *pretrained* backbones for low-quality
 faces, (2) a pipeline that never fails on ugly inputs, and (3) a threshold calibrated on data that looks
 like the benchmark. Fine-tuning on a few thousand images is the *riskiest* step: it can easily make the
-model worse on new people. So we treat it as an experiment that must beat the pretrained model on unseen
-validation identities, and we always keep one backbone frozen in the ensemble as an anchor. Everything is
+model worse on new people. Fine-tuning on our own collected data is a **required deliverable**, so we always
+produce and report a fine-tuned model, but we only *ship* it if it beats the pretrained model on unseen
+identities, and we always keep one backbone frozen in the ensemble as an anchor. Everything is
 measured on **identity-disjoint** Pakistani test data from our own consented collection.
+
+**Hidden benchmark format:** the rulebook's tagline ("pick a single face out of an entire school", "a sea of
+faces, one to find") hints at 1:N identification, while the metric list (FAR/FRR/EER) is verification. We
+cover both: `04_evaluate` reports verification metrics *and* rank-1/rank-5 + open-set identification, and
+`predict.py` has `pairs`, `identify` and `one` modes.
 
 | Stage | Choice | Why it helps (say this in the presentation) |
 |---|---|---|
@@ -56,6 +62,9 @@ report — it is *why* the challenge asks you to collect data). Use:
 Rules baked into the code:
 - **Val/test identities come only from `own_collection`** (`02_split.py --eval-sources`). Celebrity sets may
   already be inside WebFace/Glint360K, so testing on them would inflate numbers.
+- **40 % of `own_collection` people go to TRAIN** (`--own-train-frac 0.4`), because the problem statement
+  requires fine-tuning on your own collected data; the other 60 % are split val/test. With ~50 people that is
+  ~20 train / ~12 val / ~18 test. Never the same person in two splits.
 - Identity-disjoint split is asserted in code; celebrity names are normalised and merged across sources so
   the same actor can't leak between train and test.
 - Near-duplicate images under *different* identities are written to `data/label_conflicts.csv` — fix them.
@@ -66,7 +75,7 @@ Rules baked into the code:
 |---|---|
 | **Sun 18 / Mon 19** | Kaggle notebook up (§4). Download models, import halfFace + IMFDB. **Start consent collection immediately** — it is the bottleneck. Run `00_sanity_check.py` on the first 20 people. Email organisers the questions in §6. |
 | **Tue 20** | Finish collection (≥ 50 people). `01_prepare` → `02_split` → `04_evaluate` (pretrained baseline) → `05_ablation`. Inspect `worst_errors.csv`. |
-| **Wed 21** | `03_finetune` (keep only if val EER improves) → re-run 04/05 with `--finetuned`. Freeze config + `calibration.json`. Dry-run `predict.py` on a folder you have never touched. Write report. |
+| **Wed 21** | `03_finetune` (always saved; ship only if it beats pretrained) → re-run 04/05 with `--finetuned`. Freeze config + `calibration.json`. Dry-run `predict.py` on a folder you have never touched. Write report. |
 | **Thu 22** | Submit report. Build slides from `results/` (plots, ablation, per-group table, worst errors). |
 | **Fri 23** | Hidden benchmark: `predict.py`. |
 
@@ -88,7 +97,7 @@ Rules baked into the code:
 !python scripts/02_split.py --eval-sources own_collection             # identity-disjoint split + pairs
 !python scripts/04_evaluate.py --name pretrained                      # baseline with full metrics
 !python scripts/05_ablation.py                                        # ablation + stress tests
-!python scripts/03_finetune.py --epochs 6 --batch 64                  # only saves if val EER improves
+!python scripts/03_finetune.py --epochs 6 --batch 64                  # always saves best epoch; prints if it beat pretrained
 # if it saved a checkpoint: set models[adaface_ir101].finetuned_ckpt in configs/pipeline.json, then
 !python scripts/04_evaluate.py --name finetuned
 !python scripts/05_ablation.py --finetuned checkpoints/adaface_ir101_finetuned.pt
@@ -108,6 +117,7 @@ Offline test of all the plumbing (no models/GPU): `python tests/test_end_to_end.
 | `results/<name>/per_group.csv` | fairness: gender, age, skin tone, region, headwear, glasses, mask, lighting, quality flags |
 | `results/ablation/ablation.md` | contribution of each pipeline stage |
 | `results/ablation/stress_tests.csv` | blur / low-res / low-light / JPEG / CCTV / grayscale robustness, naive vs full |
+| `metrics.json` → `identification`, `summary.md` | 1:N identification: rank-1, rank-5, open-set DIR / FPIR |
 | `results/<name>/worst_errors.csv` | "challenges faced" slide — show 3–4 real failure pairs (with consent) |
 | `checkpoints/finetune_history.json` | fine-tuning curve vs pretrained |
 | `data/report_prepare.txt` | dataset statistics, detection-stage breakdown |
@@ -123,6 +133,10 @@ across groups · 8 Failure analysis & limitations · 9 Ethics.
 2. Do we run our code on their data, or do they run our model? (If they run it: package `predict.py` + models.)
 3. Ranking metric: accuracy at **our** threshold, or a threshold-free metric (EER/AUC)? Our threshold matters only for the former.
 4. Are benchmark images full photos or pre-cropped faces? (Both are handled, but it affects calibration.)
+5. Can a benchmark image contain **several people** (e.g. a group or classroom photo)? The pipeline picks one
+   face per image (the largest, most central), so group photos would need a "search every face" mode.
+6. The rulebook says qualifying teams "receive a pre-trained model and a Pakistani dataset", while the problem
+   statement says we choose the model and collect the data. Is any model or dataset being provided?
 
 ## Layout
 ```

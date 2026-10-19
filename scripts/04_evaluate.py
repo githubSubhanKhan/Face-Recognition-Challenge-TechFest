@@ -4,6 +4,7 @@
 * reports accuracy, precision, recall, F1, FAR, FRR, EER, AUC, TAR@FAR
 * ROC, DET and score-distribution plots
 * per-group breakdown (gender, age group, skin tone, region, headwear, glasses, mask, lighting, quality flags)
+* 1:N identification on the test identities: rank-1 / rank-5, open-set DIR / FPIR
 * writes results/calibration.json, which predict.py uses on the hidden benchmark
 
     python scripts/04_evaluate.py --name full_pipeline
@@ -19,7 +20,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pandas as pd  # noqa: E402
 
 from pakface.config import PipelineConfig, default_config  # noqa: E402
-from pakface.evaluation import calibrate_and_score, group_breakdown, report_markdown  # noqa: E402
+from pakface.evaluation import (  # noqa: E402
+    calibrate_and_score, group_breakdown, identification_markdown, identification_report, report_markdown,
+)
 from pakface.matching import Calibration  # noqa: E402
 from pakface.metrics import full_report, plot_all  # noqa: E402
 from pakface.pipeline import FacePipeline  # noqa: E402
@@ -65,6 +68,12 @@ def main():
     groups.to_csv(out / "per_group.csv", index=False)
     if len(groups):
         md.append("### Per-group breakdown (test)\n\n" + groups.to_markdown(index=False, floatfmt=".4f"))
+
+    ident = identification_report(store, pd.concat([pt["path_a"], pt["path_b"]]).tolist(),
+                                  pd.concat([pt["id_a"], pt["id_b"]]).tolist(), calib.weights, calib.global_threshold)
+    if ident:
+        rep["identification"] = ident
+        md.append(identification_markdown(ident))
     pd.DataFrame({"path_a": pt["path_a"], "path_b": pt["path_b"], "label": y, "score": s, "pair_quality": q,
                   "threshold": thr, "pred": (s > thr).astype(int)}).to_csv(out / "test_scores.csv", index=False)
     # hardest errors for the "challenges" slide

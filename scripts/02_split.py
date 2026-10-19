@@ -6,6 +6,9 @@ collection (--eval-sources own_collection), because:
   * public celebrity sets may already be inside the pretrained models' training data
     (WebFace / Glint360K are scraped from the web), which would inflate your numbers.
 
+--own-train-frac (default 0.4) of those own-collection identities stay in TRAIN, because the problem
+statement requires fine-tuning on your own collected data; the rest are split val/test.
+
     python scripts/02_split.py --eval-sources own_collection
 """
 import argparse
@@ -28,6 +31,9 @@ def main():
     ap.add_argument("--test-frac", type=float, default=0.6)
     ap.add_argument("--eval-sources", nargs="*", default=["own_collection"],
                     help="sources whose identities may be used for val/test (empty = any source)")
+    ap.add_argument("--own-train-frac", type=float, default=0.4,
+                    help="fraction of eval-source identities kept for TRAINING (fine-tuning must use your own "
+                         "collected data); the rest is split val/test by --val-frac/--test-frac")
     ap.add_argument("--genuine-per-id", type=int, default=30)
     ap.add_argument("--impostor-ratio", type=float, default=1.0)
     ap.add_argument("--seed", type=int, default=42)
@@ -37,7 +43,8 @@ def main():
     eval_sources = [s for s in args.eval_sources if s in set(df["source"])] or None
     if args.eval_sources and not eval_sources:
         print(f"WARNING: none of {args.eval_sources} found; val/test will be drawn from all sources")
-    df = identity_disjoint_split(df, args.val_frac, args.test_frac, args.seed, test_sources=eval_sources)
+    df = identity_disjoint_split(df, args.val_frac, args.test_frac, args.seed, test_sources=eval_sources,
+                                 eval_source_train_frac=args.own_train_frac)
     assert_disjoint(df)
     df.to_csv(Path(args.out) / "splits.csv", index=False)
 
@@ -51,6 +58,9 @@ def main():
               f"{int(pairs['label'].sum())} genuine + {int((pairs['label'] == 0).sum())} impostor pairs")
     tr = df[(df["split"] == "train") & df["train_usable"]]
     print(f"train: {tr['identity'].nunique():4d} identities, {len(tr):6d} usable images")
+    if eval_sources:
+        own = tr[tr["source"].isin(eval_sources)]
+        print(f"       of which {own['identity'].nunique()} identities / {len(own)} images from {eval_sources}")
     # leakage check across splits (identity names)
     s = df.groupby("split")["identity"].apply(set)
     for a in s.index:

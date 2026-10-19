@@ -106,6 +106,16 @@ def tune_fusion_weights(per_model: dict, labels: np.ndarray, grid=np.linspace(0,
 
 
 # ---------------------------------------------------------------------------
+def fused_embeddings(store, paths: list, weights: dict | None = None) -> np.ndarray:
+    """Concatenate per-model embeddings scaled by sqrt(normalised weight): the dot product of two fused
+    vectors equals the weighted mean of per-model cosines, i.e. the same score pair verification uses."""
+    names = list(store.emb)
+    w = weights or {m: 1.0 for m in names}
+    tot = sum(w.get(m, 0) for m in names) or 1.0
+    idx = [store.index[p] for p in paths]
+    return np.concatenate([store.emb[m][idx] * np.sqrt(w.get(m, 0) / tot) for m in names], axis=1)
+
+
 def build_templates(emb: np.ndarray, identities: list, quality: np.ndarray | None = None) -> tuple[list, np.ndarray]:
     """One template per identity: quality-weighted mean of its embeddings (renormalised)."""
     ids = sorted(set(identities))
