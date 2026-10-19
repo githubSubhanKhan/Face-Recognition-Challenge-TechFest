@@ -129,24 +129,32 @@ print("environment:", "Colab" if IN_COLAB else "Kaggle" if IN_KAGGLE else "local
         code("!python scripts/00_download_models.py"),
 
         md("""# Part 3 — Data
-Put zip files in Google Drive (folder `MyDrive/pakface/`) and set the paths below. Expected contents:
+Each source below can be **any** of:
+* a **Kaggle dataset** id `"owner/dataset-name"` (the part after `kaggle.com/datasets/` in its URL) —
+  downloaded straight into this runtime, **no Google Drive needed**;
+* a **folder**, e.g. a dataset attached on Kaggle with *Add Input* (`/kaggle/input/...`) or a Drive folder;
+* a **.zip** file.
 
-| Zip | Inside | Used for |
+| Source | Inside | Used for |
 |---|---|---|
-| `own_collection.zip` | `own_collection/P0001/*.jpg …` + optional `identities.csv`, `images.csv` | train + **val/test** (only consented Pakistani data is evaluated on) |
-| `imfdb.zip` | IMFDB folders `<Actor>/*.jpg` (any nesting) | train |
-| `halfface.zip` | halfFace `Dataset-1/P_XXX/*.jpg` | train (masks, phones) |
+| `OWN_SRC` | `P0001/*.jpg …` (one folder per person) + optional `identities.csv`, `images.csv` | train + **val/test** (only consented Pakistani data is evaluated on) |
+| `IMFDB_SRC` | `<Actor>/*.jpg` (any nesting) | train |
+| `HALFFACE_SRC` | halfFace `P_XXX/*.jpg` | train (masks, phones) |
 
-Missing zips are skipped. Personal photos stay in your private Drive — never in a public repo or dataset."""),
-        code("""DRIVE_DIR = "/content/drive/MyDrive/pakface"      # on Kaggle: the /kaggle/input/<dataset> folder
-OWN_ZIP      = f"{DRIVE_DIR}/own_collection.zip"
-IMFDB_ZIP    = f"{DRIVE_DIR}/imfdb.zip"
-HALFFACE_ZIP = f"{DRIVE_DIR}/halfface.zip"
+**Kaggle downloads on Colab** need your Kaggle API key once: kaggle.com → Settings → API → *Create New Token*,
+then in Colab click the 🔑 *Secrets* icon and add `KAGGLE_USERNAME` and `KAGGLE_KEY` (values from the downloaded
+`kaggle.json`). On Kaggle itself nothing is needed.
 
-if IN_COLAB:
+**Own photos are personal data**: keep them in your private Google Drive (Google Form uploads already are) or a
+**private** Kaggle dataset — never public. Empty sources are skipped."""),
+        code("""IMFDB_SRC    = ""   # e.g. "owner/imfdb-dataset" (Kaggle), "/kaggle/input/imfdb", or ".../imfdb.zip"
+HALFFACE_SRC = ""
+OWN_SRC      = ""   # e.g. "/content/drive/MyDrive/<form> (File responses)/..." or "/kaggle/input/<private-dataset>"
+
+if IN_COLAB and any(str(s).startswith("/content/drive") for s in [IMFDB_SRC, HALFFACE_SRC, OWN_SRC]):
     from google.colab import drive
     drive.mount("/content/drive")"""),
-        code("""import glob, shutil, zipfile
+        code("""import glob, shutil, subprocess, zipfile
 import pandas as pd
 
 IMG = (".jpg", ".jpeg", ".png", ".bmp", ".webp", ".jfif")
@@ -157,6 +165,34 @@ def unzip(zp, name):
         with zipfile.ZipFile(zp) as z:
             z.extractall(dst)
     return dst
+
+def kaggle_download(slug):
+    try:
+        import kagglehub
+    except ImportError:
+        subprocess.run([sys.executable, "-m", "pip", "install", "-q", "kagglehub"], check=True)
+        import kagglehub
+    if IN_COLAB and not os.environ.get("KAGGLE_KEY"):
+        try:
+            from google.colab import userdata
+            os.environ["KAGGLE_USERNAME"], os.environ["KAGGLE_KEY"] = userdata.get("KAGGLE_USERNAME"), userdata.get("KAGGLE_KEY")
+        except Exception as e:
+            print("no Kaggle secrets found (🔑 Secrets -> KAGGLE_USERNAME, KAGGLE_KEY):", type(e).__name__)
+    return kagglehub.dataset_download(slug)
+
+def fetch(src, name):
+    \"\"\"Kaggle id / folder / zip -> local folder, or None if src is empty.\"\"\"
+    if not src:
+        return None
+    if str(src).lower().endswith(".zip"):
+        return unzip(src, name)
+    if os.path.isdir(src):
+        return src
+    if src.count("/") == 1 and not src.startswith(("/", ".")):
+        path = kaggle_download(src)
+        zips = glob.glob(os.path.join(path, "*.zip"))
+        return unzip(zips[0], name) if zips and not any(os.path.isdir(p) for p in glob.glob(os.path.join(path, "*"))) else path
+    raise SystemExit(f"{name}: {src} is not a Kaggle id 'owner/dataset', a folder, or a .zip")
 
 def identity_root(d):
     \"\"\"Deepest folder whose sub-folders hold the images (one sub-folder per person).\"\"\"
@@ -174,20 +210,22 @@ def merge_csv(src, dst, key):
         new = pd.concat([pd.read_csv(dst), new]).drop_duplicates(subset=[key], keep="last")
     new.to_csv(dst, index=False)
 
-if os.path.exists(IMFDB_ZIP):
-    root = identity_root(unzip(IMFDB_ZIP, "imfdb"))
+src = fetch(IMFDB_SRC, "imfdb")
+if src:
+    root = identity_root(src)
     !python scripts/import_public.py --format imfdb --src "{root}" --name imfdb --copy
 else:
-    print("skip IMFDB:", IMFDB_ZIP, "not found")
+    print("skip IMFDB: IMFDB_SRC is empty")
 
-if os.path.exists(HALFFACE_ZIP):
-    root = identity_root(unzip(HALFFACE_ZIP, "halfface"))
+src = fetch(HALFFACE_SRC, "halfface")
+if src:
+    root = identity_root(src)
     !python scripts/import_public.py --format halfface --src "{root}" --name halfface --copy
 else:
-    print("skip halfFace:", HALFFACE_ZIP, "not found")
+    print("skip halfFace: HALFFACE_SRC is empty")
 
-if os.path.exists(OWN_ZIP):
-    src = unzip(OWN_ZIP, "own_collection")
+src = fetch(OWN_SRC, "own_collection")
+if src:
     root = identity_root(src)
     shutil.copytree(root, "data/raw/own_collection", dirs_exist_ok=True)
     for name, key in [("identities.csv", "identity"), ("images.csv", None)]:
@@ -196,7 +234,8 @@ if os.path.exists(OWN_ZIP):
             merge_csv(hits[0], f"data/{name}", key or pd.read_csv(hits[0]).columns[0])
     print("own_collection:", len(os.listdir("data/raw/own_collection")), "people")
 else:
-    print("skip own collection:", OWN_ZIP, "not found  <- needed for val/test!")
+    print("skip own collection: OWN_SRC is empty  <- needed for real val/test numbers "
+          "(without it, 02_split falls back to a practice split of the public data)")
 
 for s in sorted(glob.glob("data/raw/*")):
     print(f"{os.path.basename(s):16s} {len(os.listdir(s)):5d} identities")"""),
@@ -246,16 +285,25 @@ show(NAME)"""),
         md("### Per-group fairness and hardest errors"),
         code("""display(pd.read_csv(f"results/{NAME}/per_group.csv"))
 display(pd.read_csv(f"results/{NAME}/worst_errors.csv").head(10))"""),
-        md("### Save everything to Drive\nColab deletes the runtime's files when the session ends."),
-        code("""SAVE = f"{DRIVE_DIR}/outputs" if IN_COLAB else os.path.join(PROJECT, "outputs")
+        md("### Save the outputs\nColab deletes the runtime's files when the session ends. This bundles results, "
+           "the fine-tuned checkpoint and the config into `pakface_outputs.zip`: downloaded on Colab (also copied "
+           "to Drive if it is mounted), kept as notebook output on Kaggle."),
+        code("""OUT = os.path.join(PROJECT, "outputs")
 for d in ["results", "checkpoints", "configs"]:
     if os.path.exists(d):
-        shutil.copytree(d, f"{SAVE}/{d}", dirs_exist_ok=True)
+        shutil.copytree(d, f"{OUT}/{d}", dirs_exist_ok=True)
 for f in ["data/report_prepare.txt", "data/splits.csv"]:
     if os.path.exists(f):
-        os.makedirs(f"{SAVE}/data", exist_ok=True)
-        shutil.copy(f, f"{SAVE}/data/")
-print("saved to", SAVE)"""),
+        os.makedirs(f"{OUT}/data", exist_ok=True)
+        shutil.copy(f, f"{OUT}/data/")
+bundle = shutil.make_archive(os.path.join("/kaggle/working" if IN_KAGGLE else PROJECT, "pakface_outputs"), "zip", OUT)
+print("bundle:", bundle)
+if IN_COLAB:
+    if os.path.isdir("/content/drive/MyDrive"):
+        shutil.copy(bundle, "/content/drive/MyDrive/")
+        print("copied to Drive: MyDrive/pakface_outputs.zip")
+    from google.colab import files
+    files.download(bundle)"""),
 
         md("""# Part 5 — Hidden benchmark and demos
 Group photos are handled automatically: an image with 2+ faces is split into one entry per face.

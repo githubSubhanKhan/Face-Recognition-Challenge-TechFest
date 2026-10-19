@@ -27,8 +27,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--manifest", default="data/manifest.csv")
     ap.add_argument("--out", default="data")
-    ap.add_argument("--val-frac", type=float, default=0.4)
-    ap.add_argument("--test-frac", type=float, default=0.6)
+    ap.add_argument("--val-frac", type=float, default=None,
+                    help="default 0.4 of eval-source identities, or 0.15 of all identities without eval sources")
+    ap.add_argument("--test-frac", type=float, default=None,
+                    help="default 0.6 of eval-source identities, or 0.15 of all identities without eval sources")
     ap.add_argument("--eval-sources", nargs="*", default=["own_collection"],
                     help="sources whose identities may be used for val/test (empty = any source)")
     ap.add_argument("--own-train-frac", type=float, default=0.4,
@@ -42,7 +44,13 @@ def main():
     df = pd.read_csv(args.manifest)
     eval_sources = [s for s in args.eval_sources if s in set(df["source"])] or None
     if args.eval_sources and not eval_sources:
-        print(f"WARNING: none of {args.eval_sources} found; val/test will be drawn from all sources")
+        print(f"WARNING: none of {args.eval_sources} found; val/test will be drawn from all sources "
+              "(fine for a practice run, but celebrity test numbers are inflated - don't report them)")
+    # with eval sources the fractions split THOSE identities (the rest of train comes from other sources);
+    # without them they are fractions of ALL identities, so most must stay in train
+    dv, dt = (0.4, 0.6) if eval_sources else (0.15, 0.15)
+    args.val_frac = dv if args.val_frac is None else args.val_frac
+    args.test_frac = dt if args.test_frac is None else args.test_frac
     df = identity_disjoint_split(df, args.val_frac, args.test_frac, args.seed, test_sources=eval_sources,
                                  eval_source_train_frac=args.own_train_frac)
     assert_disjoint(df)
