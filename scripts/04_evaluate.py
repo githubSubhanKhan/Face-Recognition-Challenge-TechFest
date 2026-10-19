@@ -34,7 +34,8 @@ def main():
     ap.add_argument("--pairs-val", default="data/pairs_val.csv")
     ap.add_argument("--pairs-test", default="data/pairs_test.csv")
     ap.add_argument("--splits", default="data/splits.csv", help="for per-group metadata")
-    ap.add_argument("--method", choices=["max_accuracy", "eer"], default="max_accuracy")
+    ap.add_argument("--method", choices=["max_f1", "max_accuracy", "eer"], default="max_f1",
+                    help="threshold objective; max_f1 because F1 is the organisers' ranking metric")
     ap.add_argument("--no-bins", action="store_true", help="single global threshold")
     ap.add_argument("--name", default="full_pipeline")
     ap.add_argument("--out", default="results")

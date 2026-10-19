@@ -23,7 +23,13 @@ measured on **identity-disjoint** Pakistani test data from our own consented col
 **Hidden benchmark format:** the rulebook's tagline ("pick a single face out of an entire school", "a sea of
 faces, one to find") hints at 1:N identification, while the metric list (FAR/FRR/EER) is verification. We
 cover both: `04_evaluate` reports verification metrics *and* rank-1/rank-5 + open-set identification, and
-`predict.py` has `pairs`, `identify` and `one` modes.
+`predict.py` has `pairs`, `identify`, `search` and `one` modes. **Group photos** are handled automatically
+(`--multi-face auto`): an image with 2+ faces is split into one entry per face, while single-person images
+keep the normal single-face pipeline. `search` finds one person across group / classroom / CCTV photos and
+can draw boxes on the matches (`--draw`), which also makes a good live demo.
+
+**Ranking metric is F1** (organisers), but they also look at the other metrics. So thresholds are fitted to
+**maximise F1 on validation pairs** (`--method max_f1`, the default), and every other metric is still reported.
 
 | Stage | Choice | Why it helps (say this in the presentation) |
 |---|---|---|
@@ -105,6 +111,8 @@ Rules baked into the code:
 # hidden benchmark day
 !python scripts/predict.py pairs --csv /kaggle/input/bench/pairs.csv --root /kaggle/input/bench/images --out submission.csv
 !python scripts/predict.py identify --gallery gallery_dir --probes probe_dir --out ids.csv   # if it's identification
+!python scripts/predict.py search --query person_dir --photos photos_dir --out matches.csv --draw found/   # find one person
+# group photos are split into faces automatically; add --multi-face off (before the mode) only if every image is single-person
 ```
 Offline test of all the plumbing (no models/GPU): `python tests/test_end_to_end.py`.
 
@@ -131,12 +139,12 @@ across groups · 8 Failure analysis & limitations · 9 Ethics.
 
 1. Benchmark format: **verification pairs** (same/different) or **identification** (gallery + probes)? Output file format?
 2. Do we run our code on their data, or do they run our model? (If they run it: package `predict.py` + models.)
-3. Ranking metric: accuracy at **our** threshold, or a threshold-free metric (EER/AUC)? Our threshold matters only for the former.
+3. ~~Ranking metric?~~ **Answered: F1** (but not the only thing they look at) → thresholds maximise F1.
+   Still worth asking: roughly what share of benchmark pairs are same-person? F1 at a fixed threshold depends on it.
 4. Are benchmark images full photos or pre-cropped faces? (Both are handled, but it affects calibration.)
-5. Can a benchmark image contain **several people** (e.g. a group or classroom photo)? The pipeline picks one
-   face per image (the largest, most central), so group photos would need a "search every face" mode.
-6. The rulebook says qualifying teams "receive a pre-trained model and a Pakistani dataset", while the problem
-   statement says we choose the model and collect the data. Is any model or dataset being provided?
+5. Can a benchmark image contain **several people**? Not answered yet; both cases are handled
+   (`--multi-face auto`, `search` mode).
+6. ~~Is a model or dataset provided?~~ **Answered: no, use your own dataset.**
 
 ## Layout
 ```

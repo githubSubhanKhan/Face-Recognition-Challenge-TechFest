@@ -55,6 +55,7 @@ class FaceDetector:
         self.app = FaceAnalysis(name=pack, allowed_modules=["detection"], providers=providers)
         self.app.prepare(ctx_id=ctx_id, det_thresh=det_thresh, det_size=(det_size, det_size))
         self.det = self.app.det_model
+        self.det_size = det_size
         self.pad_retry, self.upscale_retry, self.enhance_retry = pad_retry, upscale_retry, enhance_retry
 
     # ------------------------------------------------------------------
@@ -110,3 +111,43 @@ class FaceDetector:
             return Detection(bbox, kps, float(bboxes[i, 4]), stage)
 
         return Detection(np.array([0, 0, w, h], dtype=np.float32), None, 0.0, "no_detection")
+
+    def detect_all(self, img: np.ndarray, min_rel_size: float = 0.25, min_px: int = 12) -> list[Detection]:
+        """Every face in a group / classroom photo, ordered left to right.
+
+        Large photos are also scanned at a higher input resolution: at 640 px, a face 100 px wide in a
+        4000 px photo shrinks to 16 px and is missed. Faces smaller than min_rel_size x the biggest face
+        are dropped, because in a single-person photo they are bystanders or posters, not the subject.
+        """
+        h, w = img.shape[:2]
+        sides = {self.det_size, min(1920, 32 * int(np.ceil(max(h, w) / 32)))}
+        boxes, kps = [], []
+        for side in sorted(s for s in sides if s >= self.det_size):
+            b, k = self.det.detect(img, input_size=(side, side), max_num=0, metric="default")
+            if b is not None and len(b):
+                boxes.append(b)
+                kps.append(k if k is not None else np.full((len(b), 5, 2), np.nan, dtype=np.float32))
+        if not boxes:
+            return []
+        b, k = np.concatenate(boxes), np.concatenate(kps)
+        keep = _nms(b[:, :4], b[:, 4], iou=0.4)
+        b, k = b[keep], k[keep]
+        side = np.minimum(b[:, 2] - b[:, 0], b[:, 3] - b[:, 1])
+        ok = side >= max(min_rel_size * side.max(), min_px)
+        b, k = b[ok], k[ok]
+        return [Detection(b[i, :4].astype(np.float32), None if np.isnan(k[i]).any() else k[i].astype(np.float32),
+                          float(b[i, 4]), "multi") for i in np.argsort(b[:, 0])]
+
+
+def _nms(boxes: np.ndarray, scores: np.ndarray, iou: float) -> np.ndarray:
+    """Greedy non-maximum suppression (merges detections of the same face from different scan sizes)."""
+    area = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
+    order, keep = np.argsort(-scores), []
+    while len(order):
+        i, rest = order[0], order[1:]
+        keep.append(i)
+        iw = np.clip(np.minimum(boxes[i, 2], boxes[rest, 2]) - np.maximum(boxes[i, 0], boxes[rest, 0]), 0, None)
+        ih = np.clip(np.minimum(boxes[i, 3], boxes[rest, 3]) - np.maximum(boxes[i, 1], boxes[rest, 1]), 0, None)
+        inter = iw * ih
+        order = rest[inter / (area[i] + area[rest] - inter + 1e-9) < iou]
+    return np.array(keep, dtype=int)

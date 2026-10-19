@@ -35,9 +35,24 @@ def best_accuracy_threshold(scores: np.ndarray, labels: np.ndarray) -> tuple[flo
     return float(t), float(best)
 
 
+def best_f1_threshold(scores: np.ndarray, labels: np.ndarray) -> tuple[float, float]:
+    """Threshold maximising F1 = 2TP / (2TP + FP + FN), the organisers' ranking metric."""
+    order = np.argsort(-scores)
+    s, y = scores[order], labels[order].astype(int)
+    tp = np.cumsum(y)                 # predicting the top i+1 scores as "same person"
+    fp = np.cumsum(1 - y)
+    f1 = 2 * tp / (tp + fp + y.sum())
+    i = int(np.argmax(f1))
+    t = (s[i] + s[i + 1]) / 2 if i + 1 < len(s) else s[i] - 1e-6
+    return float(t), float(f1[i])
+
+
+THRESHOLD_METHODS = ("max_f1", "max_accuracy", "eer")
+
+
 @dataclass
 class Calibration:
-    method: str = "max_accuracy"        # or "eer"
+    method: str = "max_accuracy"        # or "max_f1" / "eer"
     global_threshold: float = 0.3
     use_bins: bool = True
     bin_edges: list = field(default_factory=list)       # quality edges, len = n_bins + 1
@@ -48,8 +63,9 @@ class Calibration:
     def fit(self, scores, labels, pair_q=None, n_bins: int = 3, min_per_bin: int = 200,
             shrink: float = 0.5) -> "Calibration":
         scores, labels = np.asarray(scores), np.asarray(labels)
-        fit_fn = (lambda s, y: best_accuracy_threshold(s, y)[0]) if self.method == "max_accuracy" \
-            else (lambda s, y: eer_threshold(s, y))
+        fit_fn = {"max_accuracy": lambda s, y: best_accuracy_threshold(s, y)[0],
+                  "max_f1": lambda s, y: best_f1_threshold(s, y)[0],
+                  "eer": eer_threshold}[self.method]
         self.global_threshold = float(fit_fn(scores, labels))
         self.bin_edges, self.bin_thresholds = [], []
         if self.use_bins and pair_q is not None:

@@ -96,7 +96,8 @@ def main():
     ap.add_argument("--pairs-val", default="data/pairs_val.csv")
     ap.add_argument("--pairs-test", default="data/pairs_test.csv")
     ap.add_argument("--finetuned", default="", help="checkpoint from 03_finetune.py")
-    ap.add_argument("--method", choices=["max_accuracy", "eer"], default="max_accuracy")
+    ap.add_argument("--method", choices=["max_f1", "max_accuracy", "eer"], default="max_f1",
+                    help="threshold objective; max_f1 because F1 is the organisers' ranking metric")
     ap.add_argument("--skip-stress", action="store_true")
     ap.add_argument("--out", default="results/ablation")
     ap.add_argument("--ctx", type=int, default=0)

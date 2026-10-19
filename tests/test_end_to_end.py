@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT))
 from pakface import augment, detect, embedders  # noqa: E402
 from pakface.align import ARCFACE_TEMPLATE, align_face  # noqa: E402
 from pakface.detect import Detection  # noqa: E402
-from pakface.matching import Calibration, best_accuracy_threshold  # noqa: E402
+from pakface.matching import Calibration, best_accuracy_threshold, best_f1_threshold  # noqa: E402
 from pakface.metrics import compute_eer, confusion_metrics, full_report  # noqa: E402
 
 
@@ -35,6 +35,15 @@ class FakeDetector:
         h, w = img.shape[:2]
         s = w / 112.0
         return Detection(np.array([0, 0, w, h], np.float32), ARCFACE_TEMPLATE * s, 0.9, "plain")
+
+    def detect_all(self, img, min_rel_size=0.25):
+        """Synthetic group photo = N square faces side by side (width = N x height)."""
+        h, w = img.shape[:2]
+        if w < 2 * h or w % h:
+            return [self.detect(img)]
+        s = h / 112.0
+        return [Detection(np.array([i * h, 0, (i + 1) * h, h], np.float32),
+                          ARCFACE_TEMPLATE * s + np.array([i * h, 0], np.float32), 0.9, "multi") for i in range(w // h)]
 
 
 class FakeEmbedder(embedders.BaseEmbedder):
@@ -104,6 +113,9 @@ def test_metrics():
     assert r["tp"] + r["fn"] == 5000 and abs(r["accuracy"] - acc) < 1e-9
     rep = full_report(s, y, t)
     assert 0.9 < rep["auc"] < 0.95 and rep["far"] == r["far"]
+    tf, f1 = best_f1_threshold(s, y)
+    brute_f1 = max(confusion_metrics(s, y, tt)["f1"] for tt in np.linspace(-3, 3, 2001))
+    assert f1 >= brute_f1 - 1e-3 and abs(confusion_metrics(s, y, tf)["f1"] - f1) < 1e-9, (tf, f1, brute_f1)
     print("ok metrics: EER %.4f  best-acc %.4f @ %.3f" % (eer, acc, t))
 
 
@@ -240,6 +252,27 @@ def test_end_to_end():
         acc = (ids["true_identity"] == ids["predicted_identity"]).mean()
         assert acc > 0.9, acc
         run(pr, ["--ctx", "-1", "one", "--img1", str(pt["path_a"][0]), "--img2", str(pt["path_b"][0])])
+
+        # group photos: 3 different people side by side
+        grp = Path("groups")
+        grp.mkdir()
+        own_ids = sorted(d.name for d in prb.iterdir())
+        for g in range(4):
+            row = [cv2.imread(str(sorted((prb / m).iterdir())[0])) for m in own_ids[g * 3:(g + 1) * 3]]
+            cv2.imwrite(str(grp / f"group_{g}.png"), np.hstack(row))
+        target = own_ids[4]  # middle face of group_1
+        run(pr, ["--ctx", "-1", "search", "--query", str(gal / target), "--photos", "groups", "--out", "matches.csv",
+                 "--draw", "found"])
+        mt = pd.read_csv("matches.csv")
+        assert mt.iloc[0]["photo"].endswith("group_1.png") and mt.iloc[0]["face"] == 1, mt.head()
+        assert mt[mt["match"] == 1]["photo"].nunique() == 1 and Path("found/group_1_match.jpg").exists()
+        gp = Path("probes_groups") / target
+        gp.mkdir(parents=True)
+        shutil.copy(grp / "group_1.png", gp)
+        run(pr, ["--ctx", "-1", "identify", "--gallery", "gallery", "--probes", "probes_groups", "--out", "ids_g.csv"])
+        ig = pd.read_csv("ids_g.csv")
+        assert len(ig) == 3 and list(ig["predicted_identity"]) == own_ids[3:6], ig
+        print("ok group photos: search finds the person, identify labels every face")
         print("ok end-to-end: prepare -> split -> finetune -> evaluate -> ablation -> predict")
     finally:
         os.chdir(cwd)

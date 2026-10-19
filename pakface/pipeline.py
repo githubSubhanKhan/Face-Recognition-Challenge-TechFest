@@ -22,6 +22,14 @@ from .enhance import enhance_crop, needs_enhancement
 from .quality import assess
 
 
+FACE_SEP = "#face"  # "photo.jpg#face2" = the 3rd face (left to right) of a multi-person photo
+
+
+def split_face_key(key: str) -> tuple[str, int | None]:
+    path, sep, k = key.rpartition(FACE_SEP)
+    return (path, int(k)) if sep and k.isdigit() else (key, None)
+
+
 def load_image(path: str) -> np.ndarray:
     """EXIF-aware loader (phone photos are often stored rotated) that always returns BGR uint8."""
     from PIL import Image, ImageOps
@@ -81,6 +89,7 @@ class FacePipeline:
         self.det_cache = json.loads(self.det_cache_path.read_text()) if self.det_cache_path.exists() else {}
         self.detector = detector
         self.embedders = embedders or []
+        self.min_face_rel = 0.25  # set by expand_faces()
         if load_models:
             if self.detector is None:
                 from .detect import FaceDetector
@@ -108,6 +117,29 @@ class FacePipeline:
         self.det_cache[key] = det.to_json()
         return det
 
+    def detect_faces(self, path: str, img: np.ndarray | None = None, min_rel_size: float = 0.25) -> list[Detection]:
+        """All faces in the image (cached), for group photos."""
+        key = f"multi{min_rel_size}::{os.path.abspath(path)}"
+        if key not in self.det_cache:
+            img = load_image(path) if img is None else img
+            self.det_cache[key] = [d.to_json() for d in self.detector.detect_all(img, min_rel_size)]
+        return [Detection.from_json(d) for d in self.det_cache[key]]
+
+    def expand_faces(self, paths: list[str], min_rel_size: float = 0.25) -> tuple[dict, dict]:
+        """Single-person images map to [path] and keep the robust single-face pipeline (retry cascade).
+        Images with 2+ faces map to one key per face. Returns ({path: [keys]}, {key: bbox})."""
+        self.min_face_rel = min_rel_size
+        faces, boxes = {}, {}
+        for p in tqdm(list(dict.fromkeys(paths)), desc="counting faces"):
+            dets = self.detect_faces(p, min_rel_size=min_rel_size)
+            if len(dets) >= 2:
+                faces[p] = [f"{p}{FACE_SEP}{k}" for k in range(len(dets))]
+                boxes.update({k: d.bbox for k, d in zip(faces[p], dets)})
+            else:
+                faces[p] = [p]
+        self.save_det_cache()
+        return faces, boxes
+
     def crop(self, img: np.ndarray, det: Detection) -> np.ndarray:
         if det.kps is not None and self.cfg.use_alignment:
             return align_face(img, det.kps)
@@ -116,8 +148,9 @@ class FacePipeline:
         return whole_image_fallback(img)
 
     def preprocess(self, path: str, img: np.ndarray | None = None):
-        img = load_image(path) if img is None else img
-        det = self.detect(path, img)
+        real, k = split_face_key(path)
+        img = load_image(real) if img is None else img
+        det = self.detect(path, img) if k is None else self.detect_faces(real, img, self.min_face_rel)[k]
         crop = self.crop(img, det)
         face_px = float(min(det.bbox[2] - det.bbox[0], det.bbox[3] - det.bbox[1]))
         q = assess(crop, face_px, det.score if det.stage != "no_detection" else 0.3, det.kps)
@@ -150,7 +183,7 @@ class FacePipeline:
                 chunk = todo[i : i + batch]
                 crops, enh_idx, enh_crops = [], [], []
                 for j, p in enumerate(chunk):
-                    img = load_image(p)
+                    img = load_image(split_face_key(p)[0])
                     if degrade_fn is not None:
                         img = degrade_fn(img)
                     crop, q, flags, stage = self.preprocess(p, img) if degrade_fn is None else self._preprocess_nocache(img)
