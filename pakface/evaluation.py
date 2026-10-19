@@ -8,8 +8,8 @@ from .matching import Calibration, fused_embeddings, tune_fusion_weights
 from .metrics import compute_eer, confusion_metrics, full_report
 
 DEMOGRAPHIC_ATTRS = ["gender", "age_group", "skin_tone", "region", "ethnicity"]
-CONDITION_ATTRS = ["headwear", "glasses", "mask", "facial_hair", "lighting", "device"]
-NEGATIVE_VALUES = {"", "none", "no", "0", "false", "nan", "normal"}
+CONDITION_ATTRS = ["photo_type", "pose", "headwear", "glasses", "mask", "facial_hair", "lighting", "device"]
+NEGATIVE_VALUES = {"", "none", "no", "0", "false", "nan", "normal", "frontal", "phone"}
 
 
 def calibrate_and_score(store, pairs_val: pd.DataFrame, pairs_test: pd.DataFrame, method="max_accuracy",

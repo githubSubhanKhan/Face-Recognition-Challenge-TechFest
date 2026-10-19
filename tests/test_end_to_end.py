@@ -151,6 +151,84 @@ def test_align_and_augment():
     print("ok alignment + all augmentations / stress tests")
 
 
+FORM_HEADER = [
+    "Timestamp", "Email address", "Full name ", "Age group ", "Gender ",
+    "Front face, normal light: looking at the camera, no glasses or cap ",
+    "Side pose: face turned left and right (about halfway, both eyes still visible) ",
+    "Glasses or sunglasses ", "Head covering you normally wear: hijab, dupatta, chador, turban, cap or topi ",
+    "Face mask ", "Difficult lighting: night or dim room (no flash), harsh sunlight, or a window behind you ",
+    "Low-quality photos: taken from far away or from above (like CCTV), blurry, old phone, or a WhatsApp-forwarded photo ",
+    "Different look: older photo (2+ years ago), or with a different beard, moustache or hairstyle than now ",
+    "I am 18+ and agree my photos may be used for this competition as described above.",
+]
+
+
+def test_google_form_import():
+    import pandas as pd
+
+    tmp = Path(tempfile.mkdtemp())
+    rng = np.random.default_rng(4)
+    files = tmp / "Face Collection (File responses)"
+    q = FORM_HEADER[5:13]
+
+    def upload(qi, fname, uploader, size=(300, 400)):
+        d = files / (q[qi].strip().replace(":", "_") + " (File responses)")  # ':' -> '_' like a Windows zip
+        d.mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(str(d / f"{fname} - {uploader}.jpg"), rng.integers(0, 255, (*size, 3), dtype=np.uint8))
+        return f"https://drive.google.com/open?id={fname}"
+
+    def row(t, email, name, gender, ups, consent=True):
+        cells = ["" for _ in q]
+        for qi, links in ups.items():
+            cells[qi] = ", ".join(links)
+        return [t, email, name, "18-24", gender, *cells, FORM_HEADER[-1] if consent else ""]
+
+    rows = [
+        row("10/18/2026 10:00:00", "ali@x.pk", "Ali Khan", "Male",
+            {0: [upload(0, "a1", "Ali Khan"), upload(0, "a2", "Ali Khan")], 2: [upload(2, "a3", "Ali Khan", (3000, 2400))]}),
+        row("10/18/2026 11:00:00", "sara@x.pk", "Sara Ahmed", "Female",
+            {0: [upload(0, "s1", "Sara Ahmed")], 3: [upload(3, "s2", "Sara Ahmed")], 4: [upload(4, "s3", "Sara Ahmed")]}),
+        row("10/18/2026 12:00:00", "bilal@x.pk", "Bilal", "Male", {0: [upload(0, "b1", "Bilal"), upload(0, "b2", "Bilal")]},
+            consent=False),
+        row("10/18/2026 13:00:00", "zara@x.pk", "Zara Batool", "Female",
+            {0: [upload(0, "z1", "Zara B")], 5: [upload(5, "z2", "Zara B")]}),  # Google name differs from typed name
+        row("10/18/2026 14:00:00", "ALI@x.pk", "Ali Khan", "Male", {6: [upload(6, "a4", "Ali Khan")]}),  # 2nd submission
+    ]
+    pd.DataFrame(rows, columns=FORM_HEADER).to_csv(tmp / "responses.csv", index=False)
+    imp = load_script("import_google_form.py")
+    base = ["--csv", str(tmp / "responses.csv"), "--files", str(files), "--raw", str(tmp / "raw"),
+            "--meta-dir", str(tmp / "meta"), "--code-map", str(tmp / "private" / "map.csv")]
+    run(imp, base)
+    own = tmp / "raw" / "own_collection"
+    assert sorted(d.name for d in own.iterdir()) == ["P0001", "P0002"], "Zara unmatched, Bilal has no consent"
+    assert len(list((own / "P0001").iterdir())) == 4, "both of Ali's submissions merge into one person"
+
+    pd.DataFrame({"uploader": ["Zara B"], "email": ["zara@x.pk"]}).to_csv(tmp / "names.csv", index=False)
+    run(imp, base + ["--name-map", str(tmp / "names.csv")])
+    assert sorted(d.name for d in own.iterdir()) == ["P0001", "P0002", "P0003"]
+    ids = pd.read_csv(tmp / "meta" / "identities.csv")
+    ims = pd.read_csv(tmp / "meta" / "images.csv")
+    text = (tmp / "meta" / "identities.csv").read_text() + (tmp / "meta" / "images.csv").read_text()
+    assert "Ali" not in text and "@" not in text, "no names or emails outside the private map"
+    assert set(ids["identity"]) == {"P0001", "P0002", "P0003"} and set(ids["gender"]) == {"male", "female"}
+    assert ims.set_index("filename").loc["P0001_glasses_1.jpg", "glasses"] == "glasses"
+    assert ims.set_index("filename").loc["P0002_mask_1.jpg", "mask"] == "mask"
+    from PIL import Image
+
+    with Image.open(own / "P0001" / "P0001_glasses_1.jpg") as im:
+        assert max(im.size) == 2048 and not im.getexif(), "resized, metadata stripped"
+    assert "Ali Khan" in (tmp / "private" / "map.csv").read_text()
+
+    # Sara withdraws (response deleted): her photos and rows disappear, everyone else keeps their code
+    pd.DataFrame([r for r in rows if r[2] != "Sara Ahmed"], columns=FORM_HEADER).to_csv(tmp / "responses.csv", index=False)
+    run(imp, base + ["--name-map", str(tmp / "names.csv")])
+    assert sorted(d.name for d in own.iterdir()) == ["P0001", "P0003"]
+    assert "P0002" not in pd.read_csv(tmp / "meta" / "identities.csv")["identity"].tolist()
+    assert not pd.read_csv(tmp / "meta" / "images.csv")["filename"].str.startswith("P0002").any()
+    shutil.rmtree(tmp, ignore_errors=True)
+    print("ok google form import: consent filter, stable codes, name map, withdrawal, no names in metadata")
+
+
 def make_dataset(root: Path, n_ids=40, per_id=8, sources=("own_collection", "public_a")):
     rng = np.random.default_rng(3)
     k = 0
@@ -283,5 +361,6 @@ if __name__ == "__main__":
     test_metrics()
     test_calibration_bins()
     test_align_and_augment()
+    test_google_form_import()
     test_end_to_end()
     print("\nALL TESTS PASSED")

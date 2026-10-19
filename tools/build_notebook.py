@@ -22,6 +22,7 @@ ORDER = [
     "pakface/matching.py", "pakface/metrics.py", "pakface/augment.py", "pakface/heads.py",
     "pakface/antispoof.py", "pakface/evaluation.py",
     "scripts/00_download_models.py", "scripts/00_sanity_check.py", "scripts/import_public.py",
+    "scripts/import_google_form.py",
     "scripts/01_prepare_data.py", "scripts/02_split.py", "scripts/03_finetune.py", "scripts/04_evaluate.py",
     "scripts/05_ablation.py", "scripts/predict.py",
     "tests/test_end_to_end.py", "docs/consent_form.md", "docs/data_collection_protocol.md",
@@ -135,9 +136,16 @@ Each source below can be **any** of:
 * a **folder**, e.g. a dataset attached on Kaggle with *Add Input* (`/kaggle/input/...`) or a Drive folder;
 * a **.zip** file.
 
+**Our own photos come from the Google Form**: set `FORM_CSV` to the responses CSV (responses spreadsheet →
+File → Download → CSV) and `FORM_FILES` to the form's *File responses* folder in Drive. The importer keeps only
+consented responses, gives each person a code (P0001 …), converts photos to JPEG (location metadata removed)
+and records each photo's condition (glasses, head covering, mask, lighting, …) from the question it was
+uploaded to. Names and emails go only to a private code map in your Drive.
+
 | Source | Inside | Used for |
 |---|---|---|
-| `OWN_SRC` | `P0001/*.jpg …` (one folder per person) + optional `identities.csv`, `images.csv` | train + **val/test** (only consented Pakistani data is evaluated on) |
+| `FORM_CSV` + `FORM_FILES` | the Google Form export (above) | train + **val/test** (only consented Pakistani data is evaluated on) |
+| `OWN_SRC` | alternative: `P0001/*.jpg …` (one folder per person) + optional `identities.csv`, `images.csv` | same |
 | `IMFDB_SRC` | `<Actor>/*.jpg` (any nesting) | train |
 | `HALFFACE_SRC` | halfFace `P_XXX/*.jpg` | train (masks, phones) |
 
@@ -149,9 +157,14 @@ then in Colab click the 🔑 *Secrets* icon and add `KAGGLE_USERNAME` and `KAGGL
 **private** Kaggle dataset — never public. Empty sources are skipped."""),
         code("""IMFDB_SRC    = ""   # e.g. "owner/imfdb-dataset" (Kaggle), "/kaggle/input/imfdb", or ".../imfdb.zip"
 HALFFACE_SRC = ""
-OWN_SRC      = ""   # e.g. "/content/drive/MyDrive/<form> (File responses)/..." or "/kaggle/input/<private-dataset>"
+FORM_CSV     = ""   # e.g. "/content/drive/MyDrive/Face Collection (Responses).csv"
+FORM_FILES   = ""   # e.g. "/content/drive/MyDrive/Face Collection (File responses)"  (Kaggle: a private dataset)
+OWN_SRC      = ""   # only if you already have P0001/... folders instead of the form export
+# private code <-> name map: in Drive on Colab so person codes stay the same across sessions
+CODE_MAP = "/content/drive/MyDrive/pakface_private/form_code_map.csv" if IN_COLAB else "data/private/form_code_map.csv"
 
-if IN_COLAB and any(str(s).startswith("/content/drive") for s in [IMFDB_SRC, HALFFACE_SRC, OWN_SRC]):
+if IN_COLAB and any(str(s).startswith("/content/drive") for s in
+                    [IMFDB_SRC, HALFFACE_SRC, OWN_SRC, FORM_CSV, FORM_FILES] + ([CODE_MAP] if FORM_CSV else [])):
     from google.colab import drive
     drive.mount("/content/drive")"""),
         code("""import glob, shutil, subprocess, zipfile
@@ -224,6 +237,10 @@ if src:
 else:
     print("skip halfFace: HALFFACE_SRC is empty")
 
+if FORM_CSV:
+    files_dir = fetch(FORM_FILES, "form_files")
+    !python scripts/import_google_form.py --csv "{FORM_CSV}" --files "{files_dir}" --code-map "{CODE_MAP}"
+
 src = fetch(OWN_SRC, "own_collection")
 if src:
     root = identity_root(src)
@@ -233,8 +250,8 @@ if src:
         if hits:
             merge_csv(hits[0], f"data/{name}", key or pd.read_csv(hits[0]).columns[0])
     print("own_collection:", len(os.listdir("data/raw/own_collection")), "people")
-else:
-    print("skip own collection: OWN_SRC is empty  <- needed for real val/test numbers "
+elif not FORM_CSV:
+    print("skip own collection: FORM_CSV / OWN_SRC are empty  <- needed for real val/test numbers "
           "(without it, 02_split falls back to a practice split of the public data)")
 
 for s in sorted(glob.glob("data/raw/*")):

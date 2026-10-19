@@ -108,7 +108,11 @@ python tools/build_notebook.py
 # data -> data/raw/<source>/<identity>/*.jpg
 !python scripts/import_public.py --format halfface --src /kaggle/input/<halfface>/Dataset-1 --name halfface
 !python scripts/import_public.py --format imfdb    --src /kaggle/input/<imfdb>/IMFDB_final --name imfdb
-#   own photos: data/raw/own_collection/P0001/..., metadata in data/identities.csv / data/images.csv
+# own photos straight from the Google Form export (responses CSV + the form's "File responses" folder):
+!python scripts/import_google_form.py --csv responses.csv --files "<Form name> (File responses)"
+#   -> consented rows only, codes P0001.., JPEGs without location metadata, per-photo conditions from the
+#      question it was uploaded to; names/emails only in data/private/form_code_map.csv (never share it).
+#      Re-run whenever new responses arrive: codes stay stable, withdrawn people are removed.
 
 !python scripts/00_sanity_check.py --data data/raw/own_collection      # GPU + AdaFace RGB/BGR check
 !python scripts/01_prepare_data.py                                    # dedupe, detect, align, quality
