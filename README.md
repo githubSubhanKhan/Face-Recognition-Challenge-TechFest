@@ -85,7 +85,19 @@ Rules baked into the code:
 | **Thu 22** | Submit report. Build slides from `results/` (plots, ablation, per-group table, worst errors). |
 | **Fri 23** | Hidden benchmark: `predict.py`. |
 
-## 4. Run it (Kaggle, GPU T4/P100, Internet ON)
+## 4. Run it
+
+**Easiest: `PakFace_Colab.ipynb`**, one self-contained notebook (also the file to submit if a notebook is
+required). It embeds every source file as a `%%writefile` cell, then runs install → tests → models → data
+(zips from Google Drive) → prepare → split → evaluate → ablation → fine-tune → predict, and saves outputs
+to Drive. Open it in Colab with a T4 GPU and run top to bottom. It also works on Kaggle.
+
+The repo files are the source of truth. **After any code change, regenerate the notebook and commit both:**
+```bash
+python tools/build_notebook.py
+```
+
+### Or step by step (Kaggle, GPU T4/P100, Internet ON)
 
 ```bash
 !git clone <your-repo> pakface || true   # or upload the zip as a Kaggle dataset

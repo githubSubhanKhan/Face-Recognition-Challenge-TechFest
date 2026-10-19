@@ -7,6 +7,8 @@ __pycache__/
 .pytest_cache/
 .ipynb_checkpoints/
 
+test images/
+
 # --- Virtual environments ---
 venv/
 .venv/
