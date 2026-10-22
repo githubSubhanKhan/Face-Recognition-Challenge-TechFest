@@ -132,6 +132,20 @@ python tools/build_notebook.py
 ```
 Offline test of all the plumbing (no models/GPU): `python tests/test_end_to_end.py`.
 
+### Demo app (Nemo's Deep Dive theme)
+```bash
+python app.py            # http://localhost:7860: GPU if available, else CPU
+python app.py --share    # public https link (Colab / Kaggle, or another device); last cell of the notebook
+```
+* **Face Match**: capture a live picture or upload a photo for Face 1 and Face 2, press **🐠 Every Fish Has a
+  Face?** → same person / different people, with the aligned crops, similarity vs threshold, each backbone's
+  score, quality flags and boxes on group photos.
+* **Sea of Faces**: one person's face + a group photo → that person is boxed in the crowd.
+* **Dive Log**: the session's results, in memory only.
+
+Same pipeline and threshold as `predict.py` (`results/calibration.json`, else 0.30). Images are processed in
+memory, never written to the feature caches.
+
 ## 5. What the code produces for the report
 
 | File | Report section |

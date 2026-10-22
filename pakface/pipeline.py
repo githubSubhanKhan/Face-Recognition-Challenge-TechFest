@@ -147,15 +147,40 @@ class FacePipeline:
             return crop_no_align(img, det.bbox)
         return whole_image_fallback(img)
 
-    def preprocess(self, path: str, img: np.ndarray | None = None):
-        real, k = split_face_key(path)
-        img = load_image(real) if img is None else img
-        det = self.detect(path, img) if k is None else self.detect_faces(real, img, self.min_face_rel)[k]
+    def crop_and_assess(self, img: np.ndarray, det: Detection):
+        """Aligned crop of one detected face + its quality report and flags."""
         crop = self.crop(img, det)
         face_px = float(min(det.bbox[2] - det.bbox[0], det.bbox[3] - det.bbox[1]))
         q = assess(crop, face_px, det.score if det.stage != "no_detection" else 0.3, det.kps)
         flags = list(q.flags) + (["no_detection"] if det.stage == "no_detection" else [])
+        return crop, q, flags
+
+    def preprocess(self, path: str, img: np.ndarray | None = None):
+        real, k = split_face_key(path)
+        img = load_image(real) if img is None else img
+        det = self.detect(path, img) if k is None else self.detect_faces(real, img, self.min_face_rel)[k]
+        crop, q, flags = self.crop_and_assess(img, det)
         return crop, q.score, flags, det.stage
+
+    def embed_crops(self, crops: list[np.ndarray], flags: list[list]) -> tuple[dict, dict]:
+        """Per-model unit embeddings + raw norms for aligned crops. Poor-quality crops are also embedded
+        after enhancement and the two embeddings are fused (or replaced, if enhancement_fusion is off)."""
+        enh = self.cfg.use_enhancement
+        enh_idx = [j for j, f in enumerate(flags) if enh and needs_enhancement(f)]
+        enh_crops = [enhance_crop(crops[j], flags[j]) for j in enh_idx]
+        if enh and not self.cfg.enhancement_fusion:
+            crops = list(crops)
+            for j, ec in zip(enh_idx, enh_crops):
+                crops[j] = ec
+        embs, norms = {}, {}
+        for e in self.embedders:
+            f, n = e.embed(crops, flip_tta=self.cfg.use_flip_tta)
+            if enh and self.cfg.enhancement_fusion and enh_crops:
+                fe, _ = e.embed(enh_crops, flip_tta=self.cfg.use_flip_tta)
+                f[enh_idx] = f[enh_idx] + fe
+                f[enh_idx] /= np.linalg.norm(f[enh_idx], axis=1, keepdims=True)
+            embs[e.name], norms[e.name] = f, n
+        return embs, norms
 
     # ------------------------------------------------------------------
     def store_path(self) -> Path:
@@ -181,30 +206,21 @@ class FacePipeline:
             quals, flags_all, stages = [], [], []
             for i in tqdm(range(0, len(todo), batch), desc=f"embedding [{self.cfg.variant_key()}]"):
                 chunk = todo[i : i + batch]
-                crops, enh_idx, enh_crops = [], [], []
-                for j, p in enumerate(chunk):
+                crops, chunk_flags = [], []
+                for p in chunk:
                     img = load_image(split_face_key(p)[0])
                     if degrade_fn is not None:
                         img = degrade_fn(img)
                     crop, q, flags, stage = self.preprocess(p, img) if degrade_fn is None else self._preprocess_nocache(img)
                     crops.append(crop)
+                    chunk_flags.append(flags)
                     quals.append(q)
                     flags_all.append(flags)
                     stages.append(stage)
-                    if self.cfg.use_enhancement and needs_enhancement(flags):
-                        enh_idx.append(j)
-                        enh_crops.append(enhance_crop(crop, flags))
-                if self.cfg.use_enhancement and not self.cfg.enhancement_fusion:
-                    for j, ec in zip(enh_idx, enh_crops):
-                        crops[j] = ec
-                for e in self.embedders:
-                    f, n = e.embed(crops, flip_tta=self.cfg.use_flip_tta)
-                    if self.cfg.use_enhancement and self.cfg.enhancement_fusion and enh_crops:
-                        fe, _ = e.embed(enh_crops, flip_tta=self.cfg.use_flip_tta)
-                        f[enh_idx] = f[enh_idx] + fe
-                        f[enh_idx] /= np.linalg.norm(f[enh_idx], axis=1, keepdims=True)
-                    embs[e.name].append(f)
-                    norms[e.name].append(n)
+                e_chunk, n_chunk = self.embed_crops(crops, chunk_flags)
+                for name in embs:
+                    embs[name].append(e_chunk[name])
+                    norms[name].append(n_chunk[name])
             new = FeatureStore(
                 todo, {k: np.concatenate(v) for k, v in embs.items()}, {k: np.concatenate(v) for k, v in norms.items()},
                 np.array(quals, dtype=np.float32), flags_all, stages,
@@ -218,10 +234,7 @@ class FacePipeline:
 
     def _preprocess_nocache(self, img):
         det = self.detector.detect(img)
-        crop = self.crop(img, det)
-        face_px = float(min(det.bbox[2] - det.bbox[0], det.bbox[3] - det.bbox[1]))
-        q = assess(crop, face_px, det.score if det.stage != "no_detection" else 0.3, det.kps)
-        flags = list(q.flags) + (["no_detection"] if det.stage == "no_detection" else [])
+        crop, q, flags = self.crop_and_assess(img, det)
         return crop, q.score, flags, det.stage
 
 

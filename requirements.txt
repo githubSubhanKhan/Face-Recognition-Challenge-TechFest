@@ -17,3 +17,4 @@ matplotlib
 tqdm
 tabulate
 Pillow
+gradio>=6.0                # demo web app (python app.py)

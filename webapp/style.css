@@ -1,0 +1,221 @@
+/* Nemo's Deep Dive: surface teal fading into the deep, clownfish-orange accents, sonar cyan highlights. */
+:root {
+  --dd-surface: #0e6a86;
+  --dd-mid: #08385a;
+  --dd-deep: #041a30;
+  --dd-abyss: #010a15;
+  --dd-ink: #e8f7ff;
+  --dd-muted: #93b9cf;
+  --dd-sonar: #5ee4ff;
+  --dd-coral: #ff7a3d;
+  --dd-coral-2: #ff9f5a;
+  --dd-same: #3ddc97;
+  --dd-diff: #ff5d73;
+  --dd-panel: rgba(6, 34, 58, 0.66);
+  --dd-line: rgba(94, 228, 255, 0.18);
+  --dd-display: "Fredoka", "Plus Jakarta Sans", ui-rounded, system-ui, sans-serif;
+}
+
+body, gradio-app {
+  background: linear-gradient(180deg, var(--dd-surface) 0%, var(--dd-mid) 28%, var(--dd-deep) 62%, var(--dd-abyss) 100%) fixed !important;
+  color: var(--dd-ink);
+}
+.gradio-container { background: transparent !important; max-width: 1180px !important; margin: 0 auto !important; }
+.gradio-container > .main, .gradio-container .wrap { position: relative; z-index: 1; }
+footer { opacity: 0.55; }
+
+/* ---------- rising bubbles + light rays ---------- */
+.dd-ocean { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+.dd-ocean::before {
+  content: ""; position: absolute; inset: -20% -10% auto -10%; height: 70%;
+  background: repeating-linear-gradient(100deg, rgba(255,255,255,0.05) 0 40px, transparent 40px 140px);
+  filter: blur(18px); transform: skewX(-12deg); animation: dd-rays 14s ease-in-out infinite alternate;
+}
+.dd-ocean i {
+  position: absolute; bottom: -40px; border-radius: 50%;
+  border: 1.5px solid rgba(200, 245, 255, 0.7);
+  background: radial-gradient(circle at 32% 30%, rgba(255,255,255,0.85) 0 12%, rgba(160,235,255,0.18) 40%, rgba(94,228,255,0.05) 70%);
+  box-shadow: 0 0 10px rgba(94, 228, 255, 0.25);
+  animation: dd-rise linear infinite;
+}
+@keyframes dd-rise {
+  0% { transform: translate(0, 0); opacity: 0; }
+  10% { opacity: 0.9; }
+  50% { transform: translate(14px, -55vh); }
+  100% { transform: translate(-10px, -112vh); opacity: 0; }
+}
+@keyframes dd-rays { from { transform: skewX(-12deg) translateX(-3%); } to { transform: skewX(-8deg) translateX(3%); } }
+
+/* ---------- hero ---------- */
+.dd-hero { text-align: center; padding: 34px 12px 10px; }
+.dd-kicker { letter-spacing: 0.32em; font-size: 0.72rem; font-weight: 700; color: var(--dd-sonar); text-transform: uppercase; }
+.dd-hero h1 {
+  font-family: var(--dd-display); font-weight: 700; font-size: clamp(2.3rem, 6vw, 4.2rem); line-height: 1.02;
+  margin: 10px 0 4px; color: #fff; letter-spacing: 0.01em;
+  text-shadow: 0 4px 28px rgba(94, 228, 255, 0.35);
+}
+.dd-hero h1 span { color: var(--dd-coral); }
+.dd-sub { font-family: var(--dd-display); font-size: clamp(1.1rem, 2.6vw, 1.5rem); font-weight: 500; color: var(--dd-ink); }
+.dd-tag { color: var(--dd-muted); margin: 6px 0 0; font-size: 0.98rem; }
+.dd-wave { display: block; width: 100%; height: 26px; margin-top: 18px; opacity: 0.55; }
+
+.dd-intro { text-align: center; color: var(--dd-muted); margin: 4px auto 6px; max-width: 720px; font-size: 0.96rem; }
+.dd-intro b { color: var(--dd-ink); }
+
+/* ---------- tabs ---------- */
+.tabs button[role="tab"] { font-family: var(--dd-display); font-size: 1.05rem !important; font-weight: 600; color: var(--dd-muted) !important; }
+.tabs button[role="tab"][aria-selected="true"] { color: #fff !important; border-color: var(--dd-coral) !important; }
+
+/* ---------- camera / upload panels ---------- */
+.dd-cam { border: 1px solid var(--dd-line) !important; backdrop-filter: blur(6px); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35) !important; }
+.dd-cam button[aria-label="Capture from camera"],
+.dd-cam button[aria-label="Upload file"],
+.dd-cam button[aria-label="Upload a file"] {
+  width: auto !important; min-width: max-content; padding: 6px 14px !important; gap: 6px; border-radius: 999px !important;
+  white-space: nowrap; height: auto !important;
+  border: 1px solid var(--dd-line) !important; color: var(--dd-ink) !important; display: inline-flex; align-items: center;
+}
+.dd-cam button[aria-label="Capture from camera"]::after { content: "Live capture"; font-size: 0.82rem; font-weight: 600; }
+.dd-cam button[aria-label="Upload file"]::after,
+.dd-cam button[aria-label="Upload a file"]::after { content: "Upload photo"; font-size: 0.82rem; font-weight: 600; }
+.dd-cam button[aria-label="Capture from camera"] svg,
+.dd-cam button[aria-label="Upload file"] svg,
+.dd-cam button[aria-label="Upload a file"] svg { width: 16px !important; height: 16px !important; flex: none; }
+.dd-cam button[aria-label="Capture from camera"]:hover,
+.dd-cam button[aria-label="Upload file"]:hover { border-color: var(--dd-sonar) !important; }
+
+/* ---------- the big themed button ---------- */
+#dive-btn, #sweep-btn {
+  font-family: var(--dd-display) !important; font-size: 1.35rem !important; font-weight: 600 !important; letter-spacing: 0.01em;
+  padding: 16px 22px !important; border: none !important; border-radius: 999px !important; color: #fff !important;
+  background: linear-gradient(135deg, var(--dd-coral) 0%, var(--dd-coral-2) 50%, var(--dd-coral) 100%) !important;
+  background-size: 200% 100% !important;
+  box-shadow: 0 0 0 0 rgba(255, 122, 61, 0.55), 0 12px 32px rgba(255, 122, 61, 0.35) !important;
+  animation: dd-pulse 2.6s ease-out infinite; transition: transform 0.15s ease, background-position 0.4s ease;
+}
+#dive-btn:hover, #sweep-btn:hover { transform: translateY(-2px); background-position: 100% 0 !important; }
+@keyframes dd-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 122, 61, 0.5), 0 12px 32px rgba(255, 122, 61, 0.35); }
+  70% { box-shadow: 0 0 0 16px rgba(255, 122, 61, 0), 0 12px 32px rgba(255, 122, 61, 0.35); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 122, 61, 0), 0 12px 32px rgba(255, 122, 61, 0.35); }
+}
+.dd-actions { align-items: stretch; margin-top: 4px; }
+
+/* ---------- result cards ---------- */
+.dd-card {
+  background: var(--dd-panel); border: 1px solid var(--dd-line); border-radius: 22px; padding: 26px 24px;
+  backdrop-filter: blur(8px); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35); color: var(--dd-ink); text-align: center;
+  animation: dd-surface 0.45s ease-out;
+}
+@keyframes dd-surface { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.dd-card p { margin: 6px 0; }
+.dd-card.dd-same { border-color: rgba(61, 220, 151, 0.55); box-shadow: 0 0 40px rgba(61, 220, 151, 0.16), 0 18px 50px rgba(0,0,0,0.35); }
+.dd-card.dd-diff { border-color: rgba(255, 93, 115, 0.55); box-shadow: 0 0 40px rgba(255, 93, 115, 0.14), 0 18px 50px rgba(0,0,0,0.35); }
+.dd-card.dd-warn { border-color: rgba(255, 196, 87, 0.5); }
+.dd-muted { color: var(--dd-muted); font-size: 0.92rem; }
+
+.dd-verdict { font-family: var(--dd-display); font-weight: 700; font-size: clamp(1.7rem, 4.6vw, 2.6rem); letter-spacing: 0.02em; line-height: 1.1; }
+.dd-same .dd-verdict { color: var(--dd-same); }
+.dd-diff .dd-verdict { color: var(--dd-diff); }
+.dd-warn .dd-verdict { color: #ffc457; font-size: 1.5rem; }
+.dd-quip { font-size: 1.08rem; color: var(--dd-ink); }
+.dd-pill { display: inline-block; margin-top: 8px; padding: 3px 12px; border-radius: 999px; font-size: 0.8rem; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; background: rgba(94, 228, 255, 0.12); color: var(--dd-sonar); }
+.dd-pill.dd-close { background: rgba(255, 196, 87, 0.14); color: #ffc457; }
+
+.dd-pair { display: flex; align-items: center; justify-content: center; gap: 22px; margin: 22px 0 8px; flex-wrap: wrap; }
+.dd-pair figure { margin: 0; }
+.dd-pair img { width: 132px; height: 132px; border-radius: 18px; border: 2px solid var(--dd-line); object-fit: cover; display: block; }
+.dd-pair figcaption { font-size: 0.8rem; color: var(--dd-muted); margin-top: 6px; }
+.dd-link { width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; font-size: 1.6rem; font-weight: 700; }
+.dd-same .dd-link { background: rgba(61, 220, 151, 0.15); color: var(--dd-same); }
+.dd-diff .dd-link { background: rgba(255, 93, 115, 0.15); color: var(--dd-diff); }
+
+/* similarity meter */
+.dd-meter { max-width: 560px; margin: 34px auto 6px; text-align: left; }
+.dd-meter-track { position: relative; height: 14px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: visible; }
+.dd-meter-fill { height: 100%; border-radius: 999px; transition: width 0.8s ease; }
+.dd-same .dd-meter-fill, .dd-meter-fill.dd-good { background: linear-gradient(90deg, #1b8f6a, var(--dd-same)); }
+.dd-diff .dd-meter-fill, .dd-meter-fill.dd-bad { background: linear-gradient(90deg, #a3344a, var(--dd-diff)); }
+.dd-meter-thr { position: absolute; top: -6px; bottom: -6px; width: 2px; background: #fff; box-shadow: 0 0 8px rgba(255,255,255,0.8); }
+.dd-meter-thr span { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 0.72rem; color: var(--dd-ink); }
+.dd-meter-scale { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--dd-muted); margin-top: 6px; }
+
+.dd-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-width: 560px; margin: 16px auto 4px; }
+.dd-stat { background: rgba(255, 255, 255, 0.05); border-radius: 14px; padding: 10px 6px; }
+.dd-stat b { display: block; font-family: var(--dd-display); font-size: 1.45rem; font-weight: 600; color: #fff; }
+.dd-stat span { font-size: 0.74rem; color: var(--dd-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+.dd-details { max-width: 640px; margin: 18px auto 0; text-align: left; }
+.dd-details h4 { font-family: var(--dd-display); font-weight: 600; font-size: 1rem; margin: 16px 0 8px; color: var(--dd-sonar); }
+.dd-row { display: grid; grid-template-columns: 190px 1fr 56px; gap: 10px; align-items: center; font-size: 0.9rem; margin: 6px 0; }
+.dd-bar { height: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.dd-bar > div { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #2a9bc0, var(--dd-sonar)); }
+.dd-row .dd-num { text-align: right; font-variant-numeric: tabular-nums; }
+.dd-chip { display: inline-block; padding: 2px 9px; margin: 2px 4px 2px 0; border-radius: 999px; font-size: 0.78rem;
+  background: rgba(255, 196, 87, 0.13); color: #ffd58a; }
+.dd-chip.dd-ok { background: rgba(61, 220, 151, 0.12); color: #8ff0c4; }
+.dd-group { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin-top: 10px; }
+.dd-group figure { margin: 0; text-align: center; }
+.dd-group img { max-width: 290px; max-height: 220px; border-radius: 12px; border: 1px solid var(--dd-line); }
+.dd-group figcaption { font-size: 0.8rem; color: var(--dd-muted); margin-top: 4px; }
+.dd-note { margin-top: 16px; font-size: 0.8rem; color: var(--dd-muted); }
+
+/* sea-of-faces list */
+.dd-list { max-width: 620px; margin: 16px auto 0; text-align: left; }
+.dd-item { display: grid; grid-template-columns: 52px 48px 1fr 56px 84px; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 12px; font-size: 0.9rem; }
+.dd-item:nth-child(odd) { background: rgba(255, 255, 255, 0.035); }
+.dd-item img { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; }
+.dd-item .dd-num { text-align: right; font-variant-numeric: tabular-nums; }
+.dd-tag-yes { color: var(--dd-same); font-weight: 700; font-size: 0.78rem; text-transform: uppercase; }
+.dd-tag-no { color: var(--dd-muted); font-size: 0.78rem; }
+
+/* ---------- sonar (idle + scanning) ---------- */
+.dd-sonar { position: relative; width: 150px; height: 150px; margin: 6px auto 14px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(94, 228, 255, 0.10) 0%, rgba(94, 228, 255, 0.02) 60%, transparent 70%);
+  border: 1px solid rgba(94, 228, 255, 0.25); overflow: hidden; }
+.dd-sonar span { position: absolute; inset: 50%; width: 0; height: 0; border-radius: 50%; border: 2px solid var(--dd-sonar);
+  transform: translate(-50%, -50%); animation: dd-ping 2.4s ease-out infinite; opacity: 0; }
+.dd-sonar span:nth-child(2) { animation-delay: 0.8s; }
+.dd-sonar span:nth-child(3) { animation-delay: 1.6s; }
+.dd-sonar .dd-sweep { position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(from 0deg, rgba(94, 228, 255, 0.45), rgba(94, 228, 255, 0) 70deg, transparent 360deg);
+  animation: dd-spin 2.2s linear infinite; }
+.dd-sonar b { position: absolute; inset: 0; display: grid; place-items: center; font-size: 2.4rem; }
+.dd-card.dd-idle { animation: none; }
+.dd-idle .dd-muted { color: #b5d3e3; }
+.dd-idle .dd-sonar span, .dd-idle .dd-sonar .dd-sweep { animation-duration: 4.8s; }
+.dd-idle .dd-sonar .dd-sweep { opacity: 0.45; }
+@keyframes dd-ping { 0% { width: 0; height: 0; opacity: 0.9; } 100% { width: 150px; height: 150px; opacity: 0; } }
+@keyframes dd-spin { to { transform: rotate(360deg); } }
+.dd-scan .dd-title { font-family: var(--dd-display); font-size: 1.35rem; font-weight: 600; color: var(--dd-sonar); }
+.dd-dots::after { content: ""; animation: dd-dots 1.4s steps(4) infinite; }
+@keyframes dd-dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+
+/* ---------- dive log ---------- */
+.dd-logstats { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin: 6px 0 10px; }
+.dd-logstats div { background: var(--dd-panel); border: 1px solid var(--dd-line); border-radius: 14px; padding: 8px 18px; text-align: center; }
+.dd-logstats b { display: block; font-family: var(--dd-display); font-size: 1.5rem; color: #fff; }
+.dd-logstats span { font-size: 0.74rem; color: var(--dd-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+.dd-footer { text-align: center; color: var(--dd-muted); font-size: 0.82rem; padding: 26px 12px 8px; }
+.dd-footer b { color: var(--dd-ink); font-weight: 600; }
+
+@media (max-width: 640px) {
+  .dd-split { flex-wrap: wrap !important; }
+  .dd-split > * { min-width: 100% !important; flex: 1 1 100% !important; }
+  .dd-hero { padding-top: 22px; }
+  .dd-hero h1 { font-size: 2.1rem; }
+  .dd-kicker { letter-spacing: 0.14em; font-size: 0.62rem; }
+  .dd-card { padding: 20px 14px; }
+  .dd-pair img { width: 104px; height: 104px; }
+  #dive-btn, #sweep-btn { font-size: 1.15rem !important; }
+  .dd-row { grid-template-columns: 1fr 44px; }
+  .dd-row .dd-bar { grid-column: 1 / -1; grid-row: 2; }
+  .dd-item { grid-template-columns: 44px 40px 1fr 50px; }
+  .dd-item .dd-bar { display: none; }
+  .dd-stat b { font-size: 1.15rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dd-ocean i, .dd-ocean::before, #dive-btn, #sweep-btn, .dd-sonar span, .dd-sonar .dd-sweep, .dd-card { animation: none !important; }
+}

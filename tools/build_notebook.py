@@ -16,7 +16,7 @@ OUT = ROOT / "PakFace_Colab.ipynb"
 
 # dependency order first; any file not listed is appended so new modules are never silently left out
 ORDER = [
-    "requirements.txt", "configs/pipeline.json",
+    "requirements.txt", "app.py", "configs/pipeline.json",
     "pakface/__init__.py", "pakface/config.py", "pakface/data.py", "pakface/detect.py", "pakface/align.py",
     "pakface/quality.py", "pakface/enhance.py", "pakface/embedders.py", "pakface/pipeline.py",
     "pakface/matching.py", "pakface/metrics.py", "pakface/augment.py", "pakface/heads.py",
@@ -25,9 +25,10 @@ ORDER = [
     "scripts/import_google_form.py",
     "scripts/01_prepare_data.py", "scripts/02_split.py", "scripts/03_finetune.py", "scripts/04_evaluate.py",
     "scripts/05_ablation.py", "scripts/predict.py",
+    "webapp/__init__.py", "webapp/engine.py", "webapp/ui.py", "webapp/style.css",
     "tests/test_end_to_end.py", "docs/consent_form.md", "docs/data_collection_protocol.md",
 ]
-GLOBS = ["pakface/*.py", "scripts/*.py", "tests/*.py", "docs/*.md", "configs/*.json"]
+GLOBS = ["pakface/*.py", "scripts/*.py", "webapp/*.py", "webapp/*.css", "tests/*.py", "docs/*.md", "configs/*.json"]
 
 _id = 0
 
@@ -114,6 +115,7 @@ print("environment:", "Colab" if IN_COLAB else "Kaggle" if IN_KAGGLE else "local
             cells.append(md({"root": "## Project files", "configs": "## Configuration",
                              "pakface": "## `pakface/` — the pipeline library",
                              "scripts": "## `scripts/` — runnable stages",
+                             "webapp": "## `webapp/` — Nemo's Deep Dive demo app (Gradio)",
                              "tests": "## `tests/` — offline end-to-end test (synthetic data, fake models)",
                              "docs": "## `docs/` — consent form and data-collection protocol"}.get(top, f"## {top}")))
         cap = describe(rel)
@@ -345,6 +347,11 @@ for f in sorted(glob.glob("found/*.jpg"))[:4]:
         !python scripts/predict.py one --img1 "{up[0]}" --img2 "{up[1]}"
 else:
     print("upload widget is Colab-only; use: !python scripts/predict.py one --img1 a.jpg --img2 b.jpg")"""),
+        md("""### Live demo app: Nemo's Deep Dive face match
+Face Match (live capture or upload two faces → same person or not, with the evidence), Sea of Faces (box one
+person in a group photo) and a session Dive Log. Open the **public https link** printed below (the webcam works
+through it, also from a phone). The cell keeps running while the app is up: stop it to shut the app down."""),
+        code("!python app.py --share"),
     ]
     return {
         "cells": cells,
