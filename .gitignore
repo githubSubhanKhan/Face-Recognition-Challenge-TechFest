@@ -9,6 +9,8 @@ __pycache__/
 
 student_pack/
 
+*.docx
+
 test images/
 
 # --- Virtual environments ---
