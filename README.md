@@ -132,6 +132,20 @@ python tools/build_notebook.py
 ```
 Offline test of all the plumbing (no models/GPU): `python tests/test_end_to_end.py`.
 
+### Face Embedding Challenge (teacher's student pack / lab day)
+Train images (one per person, named by person) are the enrolled gallery; each test image must be closest (cosine)
+to the same person's train image. Score = top-1 accuracy, top-5 breaks ties.
+```bash
+# practice: metrics + submission file
+python scripts/eval_student_pack.py --data <pack>/practice --key <pack>/practice_key.csv --group group05
+# lab day (no key): writes group05.npz -> check it -> upload it
+python scripts/eval_student_pack.py --data <pack>/lab_pack --group group05
+python scripts/check_submission.py group05.npz --data <pack>/lab_pack
+```
+`eval_student_pack.py` is the submission route: in group photos it keeps the face that matches an enrolled
+person, which the per-image `embed()` in the teacher's `make_submission.py` cannot do (it has been filled in with
+the same pipeline, primary face only, so the official command also works).
+
 ### Demo app (Nemo's Deep Dive theme)
 ```bash
 python app.py            # http://localhost:7860: GPU if available, else CPU
